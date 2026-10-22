@@ -1,1 +1,81 @@
 
+name: Unzip Source and Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "*.zip"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Unzip project
+        run: |
+          ZIP_FILE="XiaoshiVoiceChat-Xiaozhi-Connector.zip"
+
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "Khong tim thay $ZIP_FILE trong thu muc goc!"
+            exit 1
+          fi
+
+          mkdir -p extracted
+          unzip -oq "$ZIP_FILE" -d extracted
+
+          PROJECT_DIR="$(dirname "$(find extracted -name package.json -print -quit)")"
+
+          if [ -z "$PROJECT_DIR" ] || [ ! -f "$PROJECT_DIR/package.json" ]; then
+            echo "Khong tim thay package.json!"
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Project: $PROJECT_DIR"
+
+      - name: Install dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm install
+
+      - name: Build web app
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm run build
+
+      - name: Prepare Android
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npx cap add android
+
+      - name: Sync Android
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJECT_DIR }}/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Xiaoshi-Android-APK
+          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
