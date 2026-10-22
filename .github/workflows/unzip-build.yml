@@ -1,7 +1,4 @@
-
-name: Unzip Source and Build APK
-
-on:
+'on':
   workflow_dispatch:
   push:
     paths:
